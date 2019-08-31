@@ -2,6 +2,7 @@ import boto3
 ec2 = boto3.client('ec2')
 elb = boto3.client('elbv2')
 asg = boto3.client('autoscaling')
+ec2res = boto3.resource('ec2')
 from datetime import datetime
 
 now = datetime.now()
@@ -19,6 +20,54 @@ while 1:
     except ValueError:
         print("That's not an int!")
 
+# create VPC
+vpc_response = ec2.create_vpc(CidrBlock='172.27.0.0/16')
+vpc = ec2res.Vpc(vpc_response["Vpc"]["VpcId"])
+
+# enable public dns hostname so that we can SSH into it later
+ec2.modify_vpc_attribute( VpcId = vpc.id , EnableDnsSupport = { 'Value': True } )
+ec2.modify_vpc_attribute( VpcId = vpc.id , EnableDnsHostnames = { 'Value': True } )
+
+# create an internet gateway and attach it to VPC
+internetgateway_response = ec2.create_internet_gateway()
+internetgateway = ec2res.InternetGateway(internetgateway_response["InternetGateway"]["InternetGatewayId"])
+vpc.attach_internet_gateway(InternetGatewayId=internetgateway.id)
+
+# create a route table and a public route
+for route_table in vpc.route_tables.all():  
+    route_table.create_route(DestinationCidrBlock='0.0.0.0/0', GatewayId=internetgateway.id
+)
+
+# create subnet and associate it with route table
+subnet1 = vpc.create_subnet(CidrBlock='172.27.0.0/20', AvailabilityZone="{}{}".format("eu-central-", "1a"))
+resp = ec2.modify_subnet_attribute(
+    MapPublicIpOnLaunch={
+        'Value': True
+    },
+    SubnetId=subnet1.id
+)
+subnet2 = vpc.create_subnet(CidrBlock='172.27.16.0/20', AvailabilityZone="{}{}".format("eu-central-", "1b"))
+resp = ec2.modify_subnet_attribute(
+    MapPublicIpOnLaunch={
+        'Value': True
+    },
+    SubnetId=subnet2.id
+)
+subnet3 = vpc.create_subnet(CidrBlock='172.27.32.0/20', AvailabilityZone="{}{}".format("eu-central-", "1c"))
+resp = ec2.modify_subnet_attribute(
+    MapPublicIpOnLaunch={
+        'Value': True
+    },
+    SubnetId=subnet3.id
+)
+sgname = 'sg' + dt_string
+# Create a security group and allow SSH inbound rule through the VPC
+securitygroup_response = ec2.create_security_group(GroupName=sgname, Description='test', VpcId=vpc.id)
+securitygroup = ec2res.SecurityGroup(securitygroup_response["GroupId"])
+securitygroup.authorize_ingress(CidrIp='0.0.0.0/0', IpProtocol='tcp', FromPort=22, ToPort=22)
+securitygroup.authorize_ingress(CidrIp='0.0.0.0/0', IpProtocol='tcp', FromPort=80, ToPort=80)
+securitygroup.authorize_ingress(CidrIp='0.0.0.0/0', IpProtocol='tcp', FromPort=443, ToPort=443)
+
 ltname = 'lt' + dt_string
 tgname = 'tg' + dt_string
 agsname = 'ags' + dt_string
@@ -31,7 +80,7 @@ lt = ec2.create_launch_template(
         'InstanceType': 't2.micro',
         'KeyName': 'def_key',
         'SecurityGroupIds': [
-            'sg-08cab05c0efaeadcb',
+            securitygroup.id,
         ]
     }
 )
@@ -40,10 +89,11 @@ response = elb.create_target_group(
     Name=tgname,
     Port=80,
     Protocol='HTTP',
-    VpcId='vpc-c6fa11ac'
+    VpcId=vpc.id
 )
 
 tgarn = response['TargetGroups'][0]['TargetGroupArn']
+vpczone = subnet1.id + ', ' + subnet2.id +  ', ' + subnet3.id
 
 response = asg.create_auto_scaling_group(
     AutoScalingGroupName=agsname,
@@ -52,24 +102,20 @@ response = asg.create_auto_scaling_group(
     },
     MaxSize=app_server_number_int,
     MinSize=app_server_number_int,
-    AvailabilityZones=[
-        'eu-central-1a',
-        'eu-central-1b',
-        'eu-central-1c'
-    ],
+    VPCZoneIdentifier=vpczone,
     HealthCheckGracePeriod=150
 )
 
 response = elb.create_load_balancer(
     Name=albname,
     SecurityGroups=[
-        'sg-08cab05c0efaeadcb',
+        securitygroup.id,
     ],
     Type='application',
     Subnets=[
-        'subnet-5ba9b416',
-        'subnet-b63ae9dc',
-        'subnet-21474e5c'
+        subnet1.id,
+        subnet2.id,
+        subnet3.id
     ],
 )
 
