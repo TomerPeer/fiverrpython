@@ -7,6 +7,18 @@ from datetime import datetime
 now = datetime.now()
 dt_string = now.strftime("%d%m%Y%H%M%S")
 
+app_server_number = ''
+app_server_number_int = 0
+
+while 1:
+    app_server_number = input ("Enter the number of web servers: ")
+    try:
+        app_server_number_int = int(app_server_number)
+        correct = 1
+        break
+    except ValueError:
+        print("That's not an int!")
+
 ltname = 'lt' + dt_string
 tgname = 'tg' + dt_string
 agsname = 'ags' + dt_string
@@ -38,8 +50,8 @@ response = asg.create_auto_scaling_group(
     LaunchTemplate={
         'LaunchTemplateName': ltname,
     },
-    MaxSize=3,
-    MinSize=3,
+    MaxSize=app_server_number_int,
+    MinSize=app_server_number_int,
     AvailabilityZones=[
         'eu-central-1a',
         'eu-central-1b',
