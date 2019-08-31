@@ -68,6 +68,15 @@ securitygroup.authorize_ingress(CidrIp='0.0.0.0/0', IpProtocol='tcp', FromPort=2
 securitygroup.authorize_ingress(CidrIp='0.0.0.0/0', IpProtocol='tcp', FromPort=80, ToPort=80)
 securitygroup.authorize_ingress(CidrIp='0.0.0.0/0', IpProtocol='tcp', FromPort=443, ToPort=443)
 
+kname = 'k' + dt_string
+kfile = kname + ".pem"
+
+response = ec2.create_key_pair(KeyName=kname)
+
+keyfile = open(kfile,"w+")
+keyfile.write(response['KeyMaterial'])
+keyfile.close()
+
 ltname = 'lt' + dt_string
 tgname = 'tg' + dt_string
 agsname = 'ags' + dt_string
@@ -78,7 +87,7 @@ lt = ec2.create_launch_template(
     LaunchTemplateData={
         'ImageId': 'ami-056ec73517099e4fa',
         'InstanceType': 't2.micro',
-        'KeyName': 'def_key',
+        'KeyName': kname,
         'SecurityGroupIds': [
             securitygroup.id,
         ]
