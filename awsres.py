@@ -241,7 +241,7 @@ while 1:
     for target in response['TargetHealthDescriptions']:
         if target['TargetHealth']['State'] == 'healthy':
             all_healthy = all_healthy + 1
-    if all_healthy == 3:
+    if all_healthy == app_server_number_int:
         break
     print("Checking if Targets are healthy...")
     time.sleep(15)
