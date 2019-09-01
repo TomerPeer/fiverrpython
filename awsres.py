@@ -5,10 +5,15 @@ asg = boto3.client('autoscaling')
 ec2res = boto3.resource('ec2')
 acm = boto3.client('acm')
 from datetime import datetime
+import time
 
 ####### CHANGE IMAGE ID IF YOU WANT, MINE IS PUBLIC
 imageid = 'ami-056ec73517099e4fa'
 ####### CHANGE IMAGE ID IF YOU WANT, MINE IS PUBLIC
+
+####### CHANGE REGION
+regionid = "eu-central-1"
+####### CHANGE REGION
 
 now = datetime.now()
 dt_string = now.strftime("%d%m%Y%H%M%S")
@@ -50,21 +55,21 @@ for route_table in vpc.route_tables.all():
 
 # create subnets and associate it with route table
 print("Creating Subnets...")
-subnet1 = vpc.create_subnet(CidrBlock='172.27.0.0/20', AvailabilityZone="{}{}".format("eu-central-", "1a"))
+subnet1 = vpc.create_subnet(CidrBlock='172.27.0.0/20', AvailabilityZone="{}{}".format(regionid, "a"))
 resp = ec2.modify_subnet_attribute(
     MapPublicIpOnLaunch={
         'Value': True
     },
     SubnetId=subnet1.id
 )
-subnet2 = vpc.create_subnet(CidrBlock='172.27.16.0/20', AvailabilityZone="{}{}".format("eu-central-", "1b"))
+subnet2 = vpc.create_subnet(CidrBlock='172.27.16.0/20', AvailabilityZone="{}{}".format(regionid, "b"))
 resp = ec2.modify_subnet_attribute(
     MapPublicIpOnLaunch={
         'Value': True
     },
     SubnetId=subnet2.id
 )
-subnet3 = vpc.create_subnet(CidrBlock='172.27.32.0/20', AvailabilityZone="{}{}".format("eu-central-", "1c"))
+subnet3 = vpc.create_subnet(CidrBlock='172.27.32.0/20', AvailabilityZone="{}{}".format(regionid, "c"))
 resp = ec2.modify_subnet_attribute(
     MapPublicIpOnLaunch={
         'Value': True
@@ -219,6 +224,23 @@ response = asg.attach_load_balancer_target_groups(
     ]
 )
 
+# checks if the targets in the target group are healthy
+all_healthy = 0
+
+while 1:
+    all_healthy = 0
+    response = elb.describe_target_health(
+        TargetGroupArn=tgarn,
+    )
+    for target in response['TargetHealthDescriptions']:
+        if target['TargetHealth']['State'] == 'healthy':
+            all_healthy = all_healthy + 1
+    if all_healthy == 3:
+        break
+    print("Checking if Targets are healthy...")
+    time.sleep(15)
+
+print("Everything is ready!")
 print("The DNS is:")
 print(dns)
 print("You can access it in either HTTP or HTTPS")
