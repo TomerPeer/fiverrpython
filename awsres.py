@@ -6,6 +6,8 @@ ec2res = boto3.resource('ec2')
 acm = boto3.client('acm')
 from datetime import datetime
 import time
+import urllib.request
+import ssl
 
 ####### CHANGE IMAGE ID IF YOU WANT, MINE IS PUBLIC
 imageid = 'ami-056ec73517099e4fa'
@@ -14,6 +16,10 @@ imageid = 'ami-056ec73517099e4fa'
 ####### CHANGE REGION
 regionid = "eu-central-1"
 ####### CHANGE REGION
+
+####### CHANGE TARGET GROUP PORT
+tgport = 80
+####### CHANGE TARGET GROUP PORT
 
 now = datetime.now()
 dt_string = now.strftime("%d%m%Y%H%M%S")
@@ -143,7 +149,7 @@ lt = ec2.create_launch_template(
 print("Creating Target Group...")
 response = elb.create_target_group(
     Name=tgname,
-    Port=80,
+    Port=tgport,
     Protocol='HTTP',
     VpcId=vpc.id
 )
@@ -239,6 +245,28 @@ while 1:
         break
     print("Checking if Targets are healthy...")
     time.sleep(15)
+
+# check http calls
+print("Checking if HTTP calls are working...")
+http_url = 'http://' + dns
+f = urllib.request.urlopen(http_url)
+if f.getcode() == 200:
+    print("HTTP calls are working!")
+else:
+    print("HTTP calls aren't working!")
+
+# check https calls
+print("Checking if HTTP calls are working...")
+ctx = ssl.create_default_context()
+ctx.check_hostname = False
+ctx.verify_mode = ssl.CERT_NONE
+
+https_url = 'https://' + dns
+f = urllib.request.urlopen(https_url, context=ctx)
+if f.getcode() == 200:
+    print("HTTPS calls are working!")
+else:
+    print("HTTPS calls aren't working!")
 
 print("Everything is ready!")
 print("The DNS is:")
